@@ -2,7 +2,7 @@
 import requests
 from typing import Optional, Dict, Any
 
-class ArcSalesforceAPI:
+class SalesforceRESTAPI:
     
     # set this method as static
     @staticmethod
