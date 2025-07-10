@@ -17,14 +17,16 @@ pip install SalesforceRESTAPI
 
 ## Usage
 
+> **Note:** As of version 0.1.3, authentication state (`instance_url`, `access_token`, `headers`) is stored as class variables. You must call `SalesforceRESTAPI.authenticate(...)` before using any instance methods. All instances share the same authentication state.
+
 ```python
 from SalesforceRESTAPI import SalesforceRESTAPI
 
-# Initialize the API client
-sf = SalesforceRESTAPI()
+# Authenticate (call this once before using any instance methods)
+SalesforceRESTAPI.authenticate(client_id='YOUR_CLIENT_ID', client_secret='YOUR_CLIENT_SECRET', login_url='https://login.salesforce.com')
 
-# Authenticate
-sf.authenticate(client_id='YOUR_CLIENT_ID', client_secret='YOUR_CLIENT_SECRET')
+# Now you can use instance methods
+sf = SalesforceRESTAPI()
 
 # Create a record
 account_id = sf.create_record('Account', Name='Test Account', Industry='Technology')
@@ -44,13 +46,14 @@ results = sf.queryRecords('SELECT Id, Name FROM Account')
 # Execute anonymous Apex
 apex_result = sf.execute_apex('System.debug("Hello World");')
 
-# Revoke authentication
+# Revoke authentication (clears class-level state)
 sf.revoke()
 ```
 
 ## Requirements
 - Python 3.6+
 - requests
+- python-dotenv (for loading .env files in tests)
 
 ## License
 MIT License. See [LICENSE](LICENSE) for details.
