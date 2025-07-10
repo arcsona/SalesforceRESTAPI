@@ -3,12 +3,14 @@ import requests
 from typing import Optional, Dict, Any
 
 class SalesforceRESTAPI:
-    
-    # set this method as static
+    instance_url = None
+    access_token = None
+    headers = None
+
     @staticmethod
     def authenticate(client_id: str, client_secret: str, login_url: str = 'https://login.salesforce.com') -> Dict[str, Any]:
         """
-        Authenticate with Salesforce using OAuth 2.0 Client Credentials Flow and set instance_url and access_token on the instance.
+        Authenticate with Salesforce using OAuth 2.0 Client Credentials Flow and set instance_url and access_token as class variables.
         Returns the full auth response (including access_token and instance_url).
         Note: Your Salesforce org must be configured to support this flow and the connected app must have the correct permissions.
         """
@@ -21,10 +23,10 @@ class SalesforceRESTAPI:
         response = requests.post(url, data=data)
         response.raise_for_status()
         auth = response.json()
-        self.instance_url = auth['instance_url'].rstrip('/')
-        self.access_token = auth['access_token']
-        self.headers = {
-            'Authorization': f'Bearer {self.access_token}',
+        SalesforceRESTAPI.instance_url = auth['instance_url'].rstrip('/')
+        SalesforceRESTAPI.access_token = auth['access_token']
+        SalesforceRESTAPI.headers = {
+            'Authorization': f'Bearer {SalesforceRESTAPI.access_token}',
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         }
@@ -123,10 +125,10 @@ class SalesforceRESTAPI:
         self.headers = None
 
     def get(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> requests.Response:
-        if not self.access_token:
-            raise RuntimeError("Token not set. Please authenticate first.")
-        url = f"{self.instance_url}{endpoint}"
-        response = requests.get(url, headers=self.headers, params=params)
+        if not SalesforceRESTAPI.access_token:
+            raise RuntimeError("ValueError: Token not set. Please authenticate first.")
+        url = f"{SalesforceRESTAPI.instance_url}{endpoint}"
+        response = requests.get(url, headers=SalesforceRESTAPI.headers, params=params)
         try:
             response.raise_for_status()
         except requests.HTTPError as e:
@@ -135,10 +137,10 @@ class SalesforceRESTAPI:
         return response
 
     def post(self, endpoint: str, data: Optional[Dict[str, Any]] = None) -> requests.Response:
-        if not self.access_token:
-            raise RuntimeError("Token not set. Please authenticate first.")
-        url = f"{self.instance_url}{endpoint}"
-        response = requests.post(url, headers=self.headers, json=data)
+        if not SalesforceRESTAPI.access_token:
+            raise RuntimeError("ValueError: Token not set. Please authenticate first.")
+        url = f"{SalesforceRESTAPI.instance_url}{endpoint}"
+        response = requests.post(url, headers=SalesforceRESTAPI.headers, json=data)
         try:
             response.raise_for_status()
         except requests.HTTPError as e:
@@ -147,10 +149,10 @@ class SalesforceRESTAPI:
         return response
 
     def patch(self, endpoint: str, data: Optional[Dict[str, Any]] = None) -> requests.Response:
-        if not self.access_token:
-            raise RuntimeError("Token not set. Please authenticate first.")
-        url = f"{self.instance_url}{endpoint}"
-        response = requests.patch(url, headers=self.headers, json=data)
+        if not SalesforceRESTAPI.access_token:
+            raise RuntimeError("ValueError: Token not set. Please authenticate first.")
+        url = f"{SalesforceRESTAPI.instance_url}{endpoint}"
+        response = requests.patch(url, headers=SalesforceRESTAPI.headers, json=data)
         try:
             response.raise_for_status()
         except requests.HTTPError as e:
@@ -159,10 +161,10 @@ class SalesforceRESTAPI:
         return response
 
     def delete(self, endpoint: str) -> requests.Response:
-        if not self.access_token:
-            raise RuntimeError("Token not set. Please authenticate first.")
-        url = f"{self.instance_url}{endpoint}"
-        response = requests.delete(url, headers=self.headers)
+        if not SalesforceRESTAPI.access_token:
+            raise RuntimeError("ValueError: Token not set. Please authenticate first.")
+        url = f"{SalesforceRESTAPI.instance_url}{endpoint}"
+        response = requests.delete(url, headers=SalesforceRESTAPI.headers)
         try:
             response.raise_for_status()
         except requests.HTTPError as e:
@@ -176,12 +178,12 @@ class SalesforceRESTAPI:
         Returns the parsed JSON response with execution results.
         Example: run_apex_script('System.debug("Hello World");')
         """
-        if not self.access_token:
-            raise RuntimeError("Token not set. Please authenticate first.")
+        if not SalesforceRESTAPI.access_token:
+            raise RuntimeError("ValueError: Token not set. Please authenticate first.")
         endpoint = "/services/data/v64.0/tooling/executeAnonymous/"
-        url = f"{self.instance_url}{endpoint}"
+        url = f"{SalesforceRESTAPI.instance_url}{endpoint}"
         params = {"anonymousBody": apex_code}
-        response = requests.get(url, headers=self.headers, params=params)
+        response = requests.get(url, headers=SalesforceRESTAPI.headers, params=params)
         try:
             response.raise_for_status()
             return response.json()
@@ -191,9 +193,9 @@ class SalesforceRESTAPI:
 
     def revoke(self):
         """
-        Clear authentication state (instance_url, access_token, headers).
+        Clear authentication state (instance_url, access_token, headers) at the class level.
         Use this to de-authenticate the API client.
         """
-        self.instance_url = None
-        self.access_token = None
-        self.headers = None
+        SalesforceRESTAPI.instance_url = None
+        SalesforceRESTAPI.access_token = None
+        SalesforceRESTAPI.headers = None

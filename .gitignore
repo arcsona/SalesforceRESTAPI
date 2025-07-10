@@ -63,3 +63,5 @@ Pipfile.lock
 
 # pyre
 .pyre/
+
+.env
