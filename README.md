@@ -18,10 +18,10 @@ pip install SalesforceRESTAPI
 ## Usage
 
 ```python
-from SalesforceRESTAPI import ArcSalesforceAPI
+from SalesforceRESTAPI import SalesforceRESTAPI
 
 # Initialize the API client
-sf = ArcSalesforceAPI()
+sf = SalesforceRESTAPI()
 
 # Authenticate
 sf.authenticate(client_id='YOUR_CLIENT_ID', client_secret='YOUR_CLIENT_SECRET')
