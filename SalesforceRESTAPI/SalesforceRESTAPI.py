@@ -144,6 +144,14 @@ class SalesforceRESTAPI:
         try:
             response.raise_for_status()
         except requests.HTTPError as e:
+            try:
+                errors = response.json()
+                if isinstance(errors, list) and errors:
+                    error_message = errors[0].get("message", str(e))
+                    print("Salesforce error:", error_message)
+                    raise RuntimeError(error_message)
+            except Exception:
+                pass
             print(f"POST {url} failed: {e} - {response.text}")
             raise
         return response
@@ -156,6 +164,14 @@ class SalesforceRESTAPI:
         try:
             response.raise_for_status()
         except requests.HTTPError as e:
+            try:
+                errors = response.json()
+                if isinstance(errors, list) and errors:
+                    error_message = errors[0].get("message", str(e))
+                    print("Salesforce error:", error_message)
+                    raise RuntimeError(error_message)
+            except Exception:
+                pass
             print(f"PATCH {url} failed: {e} - {response.text}")
             raise
         return response
