@@ -6,6 +6,13 @@ class SalesforceRESTAPI:
     instance_url = None
     access_token = None
     headers = None
+    last_http_status = None  # Stores the last HTTP status code
+    @classmethod
+    def get_last_http_status(cls):
+        """
+        Return the last HTTP status code from any API call (get, post, patch, delete).
+        """
+        return cls.last_http_status
 
     @staticmethod
     def authenticate(client_id: str, client_secret: str, login_url: str = 'https://login.salesforce.com') -> Dict[str, Any]:
@@ -129,6 +136,7 @@ class SalesforceRESTAPI:
             raise RuntimeError("ValueError: Token not set. Please authenticate first.")
         url = f"{SalesforceRESTAPI.instance_url}{endpoint}"
         response = requests.get(url, headers=SalesforceRESTAPI.headers, params=params)
+        SalesforceRESTAPI.last_http_status = response.status_code
         try:
             response.raise_for_status()
         except requests.HTTPError as e:
@@ -141,18 +149,15 @@ class SalesforceRESTAPI:
             raise RuntimeError("ValueError: Token not set. Please authenticate first.")
         url = f"{SalesforceRESTAPI.instance_url}{endpoint}"
         response = requests.post(url, headers=SalesforceRESTAPI.headers, json=data)
+        SalesforceRESTAPI.last_http_status = response.status_code
         try:
             response.raise_for_status()
         except requests.HTTPError as e:
-            try:
-                errors = response.json()
-                if isinstance(errors, list) and errors:
-                    error_message = errors[0].get("message", str(e))
-                    print("Salesforce error:", error_message)
-                    raise RuntimeError(error_message)
-            except Exception:
-                pass
-            print(f"POST {url} failed: {e} - {response.text}")
+            errors = response.json()
+            if isinstance(errors, list) and errors:
+                error_message = errors[0].get("message", str(e))
+                print("Salesforce error:", error_message)
+                raise RuntimeError(error_message)
             raise
         return response
 
@@ -161,18 +166,15 @@ class SalesforceRESTAPI:
             raise RuntimeError("ValueError: Token not set. Please authenticate first.")
         url = f"{SalesforceRESTAPI.instance_url}{endpoint}"
         response = requests.patch(url, headers=SalesforceRESTAPI.headers, json=data)
+        SalesforceRESTAPI.last_http_status = response.status_code
         try:
             response.raise_for_status()
         except requests.HTTPError as e:
-            try:
-                errors = response.json()
-                if isinstance(errors, list) and errors:
-                    error_message = errors[0].get("message", str(e))
-                    print("Salesforce error:", error_message)
-                    raise RuntimeError(error_message)
-            except Exception:
-                pass
-            print(f"PATCH {url} failed: {e} - {response.text}")
+            errors = response.json()
+            if isinstance(errors, list) and errors:
+                error_message = errors[0].get("message", str(e))
+                print("Salesforce error:", error_message)
+                raise RuntimeError(error_message)
             raise
         return response
 
@@ -181,6 +183,7 @@ class SalesforceRESTAPI:
             raise RuntimeError("ValueError: Token not set. Please authenticate first.")
         url = f"{SalesforceRESTAPI.instance_url}{endpoint}"
         response = requests.delete(url, headers=SalesforceRESTAPI.headers)
+        SalesforceRESTAPI.last_http_status = response.status_code
         try:
             response.raise_for_status()
         except requests.HTTPError as e:
