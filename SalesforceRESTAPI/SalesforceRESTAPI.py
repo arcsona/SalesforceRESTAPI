@@ -296,7 +296,7 @@ class SalesforceRESTAPI:
             records: List of dictionaries to convert
             
         Returns:
-            CSV formatted string
+            CSV formatted string with LF line endings (required by Salesforce Bulk API)
         """
         if not records:
             return ""
@@ -307,9 +307,9 @@ class SalesforceRESTAPI:
             fieldnames.update(record.keys())
         fieldnames = sorted(list(fieldnames))
         
-        # Create CSV in memory
-        output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        # Create CSV in memory with LF line endings (lineterminator='\n')
+        output = io.StringIO(newline='')
+        writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator='\n')
         writer.writeheader()
         writer.writerows(records)
         
