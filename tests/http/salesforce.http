@@ -1,0 +1,14 @@
+@url={{$dotenv SF_LOGIN_URL}}
+@client_id={{$dotenv SF_CLIENT_ID}}
+@client_secret={{$dotenv SF_CLIENT_SECRET}}
+
+### Get access token
+# @name get_access_token
+POST {{url}}/services/oauth2/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id={{client_id}}&client_secret={{client_secret}}
+
+### Get list of accounts
+GET {{url}}/services/data/v57.0/query/?q=SELECT+Id,+Name+FROM+Account
+Authorization: Bearer {{{{get_access_token.response.body.access_token}}}}

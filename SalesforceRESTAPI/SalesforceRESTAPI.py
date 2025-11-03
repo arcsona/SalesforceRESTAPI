@@ -1,6 +1,9 @@
 
 import requests
-from typing import Optional, Dict, Any
+import csv
+import io
+import time
+from typing import Optional, Dict, Any, List
 
 class SalesforceRESTAPI:
     instance_url = None
@@ -218,3 +221,230 @@ class SalesforceRESTAPI:
         SalesforceRESTAPI.instance_url = None
         SalesforceRESTAPI.access_token = None
         SalesforceRESTAPI.headers = None
+
+    def bulk_insert_records(self, sobject: str, records: List[Dict[str, Any]], 
+                           wait_for_completion: bool = True, 
+                           max_wait_seconds: int = 60) -> Dict[str, Any]:
+        """
+        Perform a bulk insert operation using Salesforce Bulk API 2.0.
+        
+        Args:
+            sobject: The Salesforce object type (e.g., 'Case', 'Account', 'Contact')
+            records: List of dictionaries containing the records to insert
+            wait_for_completion: Whether to wait for the job to complete (default: True)
+            max_wait_seconds: Maximum time to wait for job completion in seconds (default: 60)
+        
+        Returns:
+            Dictionary containing:
+                - job_id: The bulk job ID
+                - state: Final job state (JobComplete, InProgress, Failed, etc.)
+                - records_processed: Number of records processed
+                - records_failed: Number of records that failed
+                - successful_results: CSV string of successful records (if completed)
+                - failed_results: CSV string of failed records (if completed)
+        
+        Example:
+            records = [
+                {'Subject': 'Test Case 1', 'Status': 'New', 'Priority': 'Medium'},
+                {'Subject': 'Test Case 2', 'Status': 'New', 'Priority': 'High'}
+            ]
+            result = sf.bulk_insert_records('Case', records)
+            print(f"Job ID: {result['job_id']}")
+            print(f"Records processed: {result['records_processed']}")
+        """
+        if not SalesforceRESTAPI.access_token:
+            raise RuntimeError("ValueError: Token not set. Please authenticate first.")
+        
+        if not records or len(records) == 0:
+            raise ValueError("Records list cannot be empty")
+        
+        # Step 1: Convert list of dictionaries to CSV format
+        csv_content = self._convert_records_to_csv(records)
+        
+        # Step 2: Create bulk job
+        job_id = self._create_bulk_job(sobject, "insert")
+        
+        # Step 3: Upload CSV data to job
+        self._upload_bulk_data(job_id, csv_content)
+        
+        # Step 4: Close the job (mark upload as complete)
+        self._close_bulk_job(job_id)
+        
+        # Step 5: Wait for job completion (if requested)
+        result = {
+            'job_id': job_id,
+            'state': 'UploadComplete',
+            'records_processed': 0,
+            'records_failed': 0
+        }
+        
+        if wait_for_completion:
+            result = self._wait_for_bulk_job_completion(job_id, max_wait_seconds)
+            
+            # Get successful and failed results
+            if result['state'] == 'JobComplete':
+                result['successful_results'] = self._get_bulk_job_successful_results(job_id)
+                result['failed_results'] = self._get_bulk_job_failed_results(job_id)
+        
+        return result
+    
+    def _convert_records_to_csv(self, records: List[Dict[str, Any]]) -> str:
+        """
+        Convert a list of dictionaries to CSV format string.
+        
+        Args:
+            records: List of dictionaries to convert
+            
+        Returns:
+            CSV formatted string
+        """
+        if not records:
+            return ""
+        
+        # Get all unique field names from all records
+        fieldnames = set()
+        for record in records:
+            fieldnames.update(record.keys())
+        fieldnames = sorted(list(fieldnames))
+        
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(records)
+        
+        csv_content = output.getvalue()
+        output.close()
+        
+        return csv_content
+    
+    def _create_bulk_job(self, sobject: str, operation: str) -> str:
+        """
+        Create a bulk API job.
+        
+        Args:
+            sobject: Salesforce object type
+            operation: Operation type (insert, update, upsert, delete)
+            
+        Returns:
+            Job ID
+        """
+        endpoint = "/services/data/v62.0/jobs/ingest"
+        job_data = {
+            "object": sobject,
+            "operation": operation,
+            "contentType": "CSV"
+        }
+        
+        response = self.post(endpoint, job_data)
+        job_info = response.json()
+        return job_info['id']
+    
+    def _upload_bulk_data(self, job_id: str, csv_content: str):
+        """
+        Upload CSV data to a bulk job.
+        
+        Args:
+            job_id: The bulk job ID
+            csv_content: CSV data as string
+        """
+        endpoint = f"/services/data/v62.0/jobs/ingest/{job_id}/batches"
+        url = f"{SalesforceRESTAPI.instance_url}{endpoint}"
+        
+        # Create headers for CSV upload
+        headers = {
+            **SalesforceRESTAPI.headers,
+            'Content-Type': 'text/csv'
+        }
+        
+        response = requests.put(url, headers=headers, data=csv_content.encode('utf-8'))
+        SalesforceRESTAPI.last_http_status = response.status_code
+        
+        if response.status_code not in [200, 201]:
+            raise RuntimeError(f"Failed to upload bulk data: {response.text}")
+    
+    def _close_bulk_job(self, job_id: str):
+        """
+        Close a bulk job to begin processing.
+        
+        Args:
+            job_id: The bulk job ID
+        """
+        endpoint = f"/services/data/v62.0/jobs/ingest/{job_id}"
+        job_update = {"state": "UploadComplete"}
+        self.patch(endpoint, job_update)
+    
+    def _wait_for_bulk_job_completion(self, job_id: str, max_wait_seconds: int) -> Dict[str, Any]:
+        """
+        Poll bulk job status until completion or timeout.
+        
+        Args:
+            job_id: The bulk job ID
+            max_wait_seconds: Maximum seconds to wait
+            
+        Returns:
+            Dictionary with job status information
+        """
+        endpoint = f"/services/data/v62.0/jobs/ingest/{job_id}"
+        start_time = time.time()
+        poll_interval = 2  # seconds
+        
+        while True:
+            elapsed = time.time() - start_time
+            if elapsed > max_wait_seconds:
+                # Timeout - return current state
+                response = self.get(endpoint)
+                job_info = response.json()
+                return {
+                    'job_id': job_id,
+                    'state': job_info.get('state', 'Unknown'),
+                    'records_processed': job_info.get('numberRecordsProcessed', 0),
+                    'records_failed': job_info.get('numberRecordsFailed', 0),
+                    'timeout': True
+                }
+            
+            # Check job status
+            response = self.get(endpoint)
+            job_info = response.json()
+            state = job_info.get('state')
+            
+            # Check if job is in a terminal state
+            if state in ['JobComplete', 'Failed', 'Aborted']:
+                return {
+                    'job_id': job_id,
+                    'state': state,
+                    'records_processed': job_info.get('numberRecordsProcessed', 0),
+                    'records_failed': job_info.get('numberRecordsFailed', 0),
+                    'timeout': False
+                }
+            
+            # Wait before next poll
+            time.sleep(poll_interval)
+    
+    def _get_bulk_job_successful_results(self, job_id: str) -> str:
+        """
+        Get successful results from a completed bulk job.
+        
+        Args:
+            job_id: The bulk job ID
+            
+        Returns:
+            CSV string of successful records
+        """
+        endpoint = f"/services/data/v62.0/jobs/ingest/{job_id}/successfulResults"
+        response = self.get(endpoint)
+        return response.text
+    
+    def _get_bulk_job_failed_results(self, job_id: str) -> str:
+        """
+        Get failed results from a completed bulk job.
+        
+        Args:
+            job_id: The bulk job ID
+            
+        Returns:
+            CSV string of failed records
+        """
+        endpoint = f"/services/data/v62.0/jobs/ingest/{job_id}/failedResults"
+        response = self.get(endpoint)
+        return response.text

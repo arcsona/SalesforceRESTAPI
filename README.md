@@ -5,9 +5,11 @@ A simple Python library to interact with the Salesforce REST API using OAuth 2.0
 ## Features
 - Authenticate with Salesforce using OAuth 2.0 Client Credentials
 - Basic CRUD operations (create, read, update, delete) for Salesforce objects
+- Bulk API 2.0 support for inserting large datasets
 - SOQL query support
 - Apex script execution via Tooling API
 - Record verification utilities
+- HTTP status code tracking for all API requests
 
 ## Installation
 
@@ -45,6 +47,19 @@ results = sf.queryRecords('SELECT Id, Name FROM Account')
 
 # Execute anonymous Apex
 apex_result = sf.execute_apex('System.debug("Hello World");')
+
+# Bulk insert records (for large datasets)
+records = [
+    {'Subject': 'Test Case 1', 'Status': 'New', 'Priority': 'Medium'},
+    {'Subject': 'Test Case 2', 'Status': 'New', 'Priority': 'High'},
+    {'Subject': 'Test Case 3', 'Status': 'New', 'Priority': 'Low'}
+]
+result = sf.bulk_insert_records('Case', records)
+print(f"Job ID: {result['job_id']}, Records Processed: {result['records_processed']}")
+
+# Get last HTTP status code
+status_code = SalesforceRESTAPI.get_last_http_status()
+print(f"Last HTTP Status: {status_code}")
 
 # Revoke authentication (clears class-level state)
 sf.revoke()
