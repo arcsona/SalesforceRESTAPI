@@ -125,6 +125,41 @@ class SalesforceRESTAPI:
         endpoint = f"/services/data/v64.0/query"
         params = {"q": soql}
         return self.get(endpoint, params=params)
+
+    def query_all(self, soql: str) -> Dict[str, Any]:
+        """
+        Execute a SOQL query using the `queryAll` endpoint to include archived and deleted records.
+        This method will follow `nextRecordsUrl` until all records are retrieved and return
+        a combined result dictionary with keys `totalSize` and `records`.
+
+        Example: query_all('SELECT Id, Name FROM Account')
+        """
+        # Initial request to queryAll endpoint
+        endpoint = f"/services/data/v64.0/queryAll"
+        params = {"q": soql}
+        response = self.get(endpoint, params=params)
+        try:
+            result = response.json()
+        except Exception as e:
+            print(f"Failed to parse queryAll response: {e}")
+            return {"totalSize": 0, "records": []}
+
+        records = result.get("records", [])
+
+        # Follow nextRecordsUrl if present to page through results
+        next_url = result.get("nextRecordsUrl")
+        while next_url:
+            # nextRecordsUrl is a path like '/services/data/vXX.X/query/01g.../2'
+            response = self.get(next_url)
+            try:
+                page = response.json()
+            except Exception as e:
+                print(f"Failed to parse paged queryAll response: {e}")
+                break
+            records.extend(page.get("records", []))
+            next_url = page.get("nextRecordsUrl")
+
+        return {"totalSize": len(records), "records": records}
     
     """
     Simple Salesforce REST API manager for authentication and basic CRUD operations.

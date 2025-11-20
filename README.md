@@ -65,6 +65,70 @@ print(f"Last HTTP Status: {status_code}")
 sf.revoke()
 ```
 
+## Query All (pagination helper)
+
+`query_all` is a convenience method that wraps the REST `/queryAll` endpoint and automatically pages through `nextRecordsUrl` to return all matching records (including archived/deleted when supported).
+
+Usage:
+
+```python
+# Run a SOQL using queryAll and retrieve all pages
+soql = "SELECT Id, Name FROM Account WHERE CreatedDate > LAST_N_DAYS:365"
+result = sf.query_all(soql)
+print(f"Total records: {result['totalSize']}")
+for rec in result['records'][:10]:
+    print(rec.get('Id'), rec.get('Name'))
+```
+
+Return value:
+- A dict with keys: `totalSize` (int) and `records` (list of record dicts).
+- The method follows `nextRecordsUrl` until all pages are fetched.
+
+Notes:
+- Use `query_all` when you expect many results or need deleted/archived records. For small queries, `run_query`/`queryRecords` is sufficient.
+- Make sure `SalesforceRESTAPI.authenticate(...)` is called first so class-level auth state is set.
+
+
+## Robot Framework Usage
+
+You can use this library from Robot Framework by importing it as a Python library in your test suite. Below are the minimal steps to integrate:
+
+1. Install the package into the same Python environment used by Robot Framework:
+
+```bash
+# activate your virtualenv, then
+pip install SalesforceRESTAPI
+pip install robotframework
+```
+
+2. Create a simple Robot Framework resource or test that imports the Python module. Example `salesforce.robot`:
+
+```robot
+*** Settings ***
+Library    SalesforceRESTAPI
+
+*** Variables ***
+${CLIENT_ID}      your_client_id
+${CLIENT_SECRET}  your_client_secret
+${LOGIN_URL}      https://login.salesforce.com
+
+*** Test Cases ***
+Bulk Create Cases From List
+    # Authenticate using class method (sets class-level state)
+    Evaluate    SalesforceRESTAPI.authenticate('${CLIENT_ID}', '${CLIENT_SECRET}', '${LOGIN_URL}')    modules=SalesforceRESTAPI
+    ${sf}=    Evaluate    SalesforceRESTAPI.SalesforceRESTAPI()    modules=SalesforceRESTAPI
+    @{records}=    Create List
+    ...    {'Subject': 'RF Case 1', 'Status': 'New', 'Priority': 'Medium'}
+    ...    {'Subject': 'RF Case 2', 'Status': 'New', 'Priority': 'High'}
+    ${result}=    Evaluate    ${sf}.bulk_insert_records('Case', ${records}, wait_for_completion=True, max_wait_seconds=60)    modules=SalesforceRESTAPI
+    Log    Job ID: ${result['job_id']} | State: ${result['state']}
+```
+
+Notes:
+- We use `Evaluate` to call class methods and instance methods from Robot; alternatively you can wrap small helper keywords in a custom Robot library that calls into `SalesforceRESTAPI`.
+- Ensure the Robot process uses the same virtual environment where `SalesforceRESTAPI` is installed so dependencies like `requests` and `python-dotenv` are available.
+
+
 ## Requirements
 - Python 3.6+
 - requests
