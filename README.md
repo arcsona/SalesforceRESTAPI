@@ -129,6 +129,63 @@ Notes:
 - Ensure the Robot process uses the same virtual environment where `SalesforceRESTAPI` is installed so dependencies like `requests` and `python-dotenv` are available.
 
 
+## JWT (JWT Bearer Token Flow) Authentication
+
+Use `SalesforceRESTAPI.authenticate_jwt(...)` to authenticate using the JWT Bearer Token Flow (connected app / external client). This is useful when you need to impersonate a specific Salesforce user without interactive login.
+
+Signature:
+
+```python
+SalesforceRESTAPI.authenticate_jwt(client_id, username, private_key, login_url='https://login.salesforce.com', audience=None, private_key_is_file=True)
+```
+
+Parameters:
+- `client_id`: Connected App consumer key (the `iss` claim).
+- `username`: Salesforce username to impersonate (the `sub` claim).
+- `private_key`: Path to the PEM private key file or the PEM string itself.
+- `login_url`: Salesforce login URL (defaults to `https://login.salesforce.com`).
+- `audience`: Optional audience override; defaults to `login_url + '/services/oauth2/token'`.
+- `private_key_is_file`: If `True` and `private_key` is a path that exists, the file is read; otherwise `private_key` is used as the key material.
+
+Return value:
+- Returns the parsed JSON auth response from Salesforce (typically contains `access_token` and may include `instance_url`). The method sets `SalesforceRESTAPI.access_token` and `SalesforceRESTAPI.headers` and will set `instance_url` when present in the response.
+
+Notes and requirements:
+- Requires `PyJWT` and a compatible cryptography backend. Install with:
+
+```bash
+pip install PyJWT cryptography
+```
+
+- If the JWT request fails, the method raises `RuntimeError` with the HTTP response body included to aid debugging.
+- Some orgs or endpoints may not return `instance_url` for JWT flows; in that case the library will only set the token and headers — set `instance_url` manually if required.
+
+Example:
+
+```python
+from SalesforceRESTAPI import SalesforceRESTAPI
+
+# Using a private key file
+auth = SalesforceRESTAPI.authenticate_jwt(
+    client_id='YOUR_CONNECTED_APP_CLIENT_ID',
+    username='user@example.com',
+    private_key='/path/to/private_key.pem'
+)
+
+# Or using a PEM string stored in a variable
+pem = open('/path/to/private_key.pem').read()
+auth = SalesforceRESTAPI.authenticate_jwt(
+    client_id='YOUR_CONNECTED_APP_CLIENT_ID',
+    username='user@example.com',
+    private_key=pem,
+    private_key_is_file=False
+)
+
+# After successful auth you can construct an instance and call methods
+sf = SalesforceRESTAPI()
+accounts = sf.queryRecords('SELECT Id, Name FROM Account LIMIT 5')
+
+
 ## Requirements
 - Python 3.6+
 - requests
