@@ -3,6 +3,8 @@ import requests
 import csv
 import io
 import time
+import os
+import datetime
 from typing import Optional, Dict, Any, List
 
 class SalesforceRESTAPI:
@@ -37,6 +39,89 @@ class SalesforceRESTAPI:
         SalesforceRESTAPI.access_token = auth['access_token']
         SalesforceRESTAPI.headers = {
             'Authorization': f'Bearer {SalesforceRESTAPI.access_token}',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        return auth
+
+    @staticmethod
+    def authenticate_jwt(client_id: str,
+                         username: str,
+                         private_key: str,
+                         login_url: str = 'https://login.salesforce.com',
+                         audience: Optional[str] = None,
+                         private_key_is_file: bool = True) -> Dict[str, Any]:
+        """
+        Authenticate with Salesforce using the JWT Bearer Token Flow (external client / connected app).
+
+        Args:
+            client_id: Connected App consumer key (iss claim).
+            username: The Salesforce username to impersonate (sub claim).
+            private_key: Path to the PEM private key file or the PEM string itself.
+            login_url: Salesforce login URL (defaults to https://login.salesforce.com).
+            audience: Optional audience (defaults to login_url + '/services/oauth2/token').
+            private_key_is_file: If True, `private_key` is treated as a file path when it exists.
+
+        Returns:
+            Parsed JSON auth response from Salesforce containing `access_token` and optionally `instance_url`.
+
+        Raises:
+            RuntimeError: If required dependency `PyJWT` is missing or the auth request fails.
+
+        Example:
+            SalesforceRESTAPI.authenticate_jwt(CLIENT_ID, 'user@example.com', '/path/to/key.pem')
+        """
+        try:
+            import jwt
+        except Exception:
+            raise RuntimeError('PyJWT is required for JWT authentication. Install with `pip install PyJWT cryptography`.')
+
+        token_url = audience or f"{login_url}/services/oauth2/token"
+
+        # Read private key from file if requested and path exists
+        key_data = private_key
+        if private_key_is_file and isinstance(private_key, str) and os.path.exists(private_key):
+            with open(private_key, 'r') as f:
+                key_data = f.read()
+
+        now = int(time.time())
+        payload = {
+            'iss': client_id,
+            'sub': username,
+            'aud': token_url,
+            'iat': now,
+            'exp': now + 180
+        }
+
+        try:
+            assertion = jwt.encode(payload, key_data, algorithm='RS256')
+        except Exception as e:
+            raise RuntimeError(f'Failed to sign JWT assertion: {e}')
+
+        # PyJWT may return bytes in some versions
+        if isinstance(assertion, bytes):
+            assertion = assertion.decode('utf-8')
+
+        data = {
+            'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+            'assertion': assertion
+        }
+
+        response = requests.post(token_url, data=data)
+        try:
+            response.raise_for_status()
+        except Exception as e:
+            # Surface the response body where possible for debugging
+            text = getattr(response, 'text', '')
+            raise RuntimeError(f'JWT authentication failed: {e} - {text}')
+
+        auth = response.json()
+        # Some orgs do not return instance_url for JWT flow (e.g., when using certain endpoints). Only set if present.
+        if 'instance_url' in auth and auth['instance_url']:
+            SalesforceRESTAPI.instance_url = auth['instance_url'].rstrip('/')
+        SalesforceRESTAPI.access_token = auth.get('access_token')
+        SalesforceRESTAPI.headers = {
+            'Authorization': f"Bearer {SalesforceRESTAPI.access_token}",
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         }

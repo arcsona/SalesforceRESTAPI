@@ -1,0 +1,7 @@
+requests
+PyJWT[crypto]
+cryptography
+python-dotenv
+PyJWT
+cryptography
+paramiko

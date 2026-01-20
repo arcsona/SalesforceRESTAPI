@@ -65,3 +65,4 @@ Pipfile.lock
 .pyre/
 
 .env
+*.key
